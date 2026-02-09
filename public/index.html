@@ -12,20 +12,45 @@
         <p class="eyebrow">Reaction Timer</p>
         <h1>Tap when the arena turns green.</h1>
         <p class="subtext">
-          Test your reflexes. Premature clicks fail the round. Server-side checks
-          enforce fairness.
+          Login required. Scores are persisted in SQLite and validated server-side.
         </p>
 
-        <button id="startBtn" class="start-btn" type="button">Start Test</button>
+        <section id="authBox" class="auth-box">
+          <div id="authForms" class="auth-forms">
+            <div class="auth-row">
+              <input id="usernameInput" type="text" placeholder="Username" maxlength="24" />
+              <input id="passwordInput" type="password" placeholder="Password" maxlength="128" />
+            </div>
+            <div class="auth-actions">
+              <button id="registerBtn" class="auth-btn" type="button">Register</button>
+              <button id="loginBtn" class="auth-btn primary" type="button">Login</button>
+            </div>
+          </div>
 
-        <button id="arena" class="arena" type="button" aria-label="Reaction arena">
-          <span id="arenaLabel">Press Start</span>
+          <div id="userPanel" class="user-panel hidden">
+            <p id="userLine">Logged in as -</p>
+            <button id="logoutBtn" class="auth-btn" type="button">Logout</button>
+          </div>
+        </section>
+
+        <button id="startBtn" class="start-btn" type="button" disabled>Start Test</button>
+
+        <button id="arena" class="arena" type="button" aria-label="Reaction arena" disabled>
+          <span id="arenaLabel">Login to play</span>
         </button>
 
         <section class="stats">
-          <p id="statusLine">Status: Idle</p>
+          <p id="statusLine">Status: Please login.</p>
           <p id="currentLine">Current: -</p>
-          <p id="fastestLine">Fastest: -</p>
+          <p id="personalFastestLine">Personal Fastest: -</p>
+          <p id="globalFastestLine">Global Fastest: -</p>
+        </section>
+
+        <section class="history">
+          <h2>Recent Attempts</h2>
+          <ul id="historyList">
+            <li>No attempts yet.</li>
+          </ul>
         </section>
       </section>
     </main>

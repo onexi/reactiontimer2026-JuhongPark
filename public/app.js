@@ -2,17 +2,30 @@ const state = {
   isTesting: false,
   hasTriggered: false,
   triggerTime: null,
-  fastest: null,
+  fastestPersonal: null,
+  fastestGlobal: null,
   currentTest: null,
-  triggerTimerId: null
+  triggerTimerId: null,
+  user: null
 };
+
+const usernameInput = document.getElementById('usernameInput');
+const passwordInput = document.getElementById('passwordInput');
+const registerBtn = document.getElementById('registerBtn');
+const loginBtn = document.getElementById('loginBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const authForms = document.getElementById('authForms');
+const userPanel = document.getElementById('userPanel');
+const userLine = document.getElementById('userLine');
 
 const startBtn = document.getElementById('startBtn');
 const arena = document.getElementById('arena');
 const arenaLabel = document.getElementById('arenaLabel');
 const statusLine = document.getElementById('statusLine');
 const currentLine = document.getElementById('currentLine');
-const fastestLine = document.getElementById('fastestLine');
+const personalFastestLine = document.getElementById('personalFastestLine');
+const globalFastestLine = document.getElementById('globalFastestLine');
+const historyList = document.getElementById('historyList');
 
 function setArenaState(nextState, label) {
   arena.classList.remove('waiting', 'ready', 'go', 'penalty');
@@ -29,37 +42,184 @@ function resetRound() {
     clearTimeout(state.triggerTimerId);
     state.triggerTimerId = null;
   }
-  startBtn.disabled = false;
-  setArenaState('ready', 'Press Start');
+  startBtn.disabled = !state.user;
+  arena.disabled = !state.user;
+  setArenaState(state.user ? 'ready' : null, state.user ? 'Press Start' : 'Login to play');
 }
 
-function updateFastest(value) {
-  state.fastest = Number.isFinite(value) ? value : null;
-  fastestLine.textContent = state.fastest === null ? 'Fastest: -' : `Fastest: ${state.fastest} ms`;
+function updateScoreboard(payload) {
+  state.fastestGlobal = Number.isFinite(payload?.global_fastest) ? payload.global_fastest : null;
+  state.fastestPersonal = Number.isFinite(payload?.personal_fastest) ? payload.personal_fastest : null;
+
+  personalFastestLine.textContent =
+    state.fastestPersonal === null
+      ? 'Personal Fastest: -'
+      : `Personal Fastest: ${state.fastestPersonal} ms`;
+
+  globalFastestLine.textContent =
+    state.fastestGlobal === null
+      ? 'Global Fastest: -'
+      : `Global Fastest: ${state.fastestGlobal} ms`;
 }
 
-async function loadFastest() {
+function renderHistory(attempts) {
+  historyList.innerHTML = '';
+
+  if (!attempts || attempts.length === 0) {
+    const li = document.createElement('li');
+    li.textContent = 'No attempts yet.';
+    historyList.appendChild(li);
+    return;
+  }
+
+  attempts.forEach((attempt) => {
+    const li = document.createElement('li');
+    const date = new Date(attempt.created_at).toLocaleString();
+    li.textContent = `${attempt.reaction_time} ms (${date})`;
+    historyList.appendChild(li);
+  });
+}
+
+function setAuthUi() {
+  const loggedIn = Boolean(state.user);
+  authForms.classList.toggle('hidden', loggedIn);
+  userPanel.classList.toggle('hidden', !loggedIn);
+
+  if (loggedIn) {
+    userLine.textContent = `Logged in as ${state.user.username}`;
+    startBtn.disabled = false;
+    arena.disabled = false;
+    setArenaState('ready', 'Press Start');
+  } else {
+    startBtn.disabled = true;
+    arena.disabled = true;
+    currentLine.textContent = 'Current: -';
+    setArenaState(null, 'Login to play');
+    renderHistory([]);
+  }
+}
+
+async function apiJson(url, options = {}) {
+  const response = await fetch(url, {
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    ...options
+  });
+
+  let payload = {};
   try {
-    const response = await fetch('/api/fastest');
-    const payload = await response.json();
-    updateFastest(payload.fastest);
+    payload = await response.json();
   } catch (error) {
-    statusLine.textContent = 'Status: Could not load fastest score.';
+    payload = {};
+  }
+
+  if (!response.ok) {
+    const message = payload.message || 'Request failed.';
+    throw new Error(message);
+  }
+
+  return payload;
+}
+
+async function refreshFastest() {
+  try {
+    const payload = await apiJson('/api/fastest', { method: 'GET' });
+    updateScoreboard(payload);
+  } catch (error) {
+    statusLine.textContent = `Status: ${error.message}`;
+  }
+}
+
+async function refreshHistory() {
+  if (!state.user) {
+    renderHistory([]);
+    return;
+  }
+
+  try {
+    const payload = await apiJson('/api/history', { method: 'GET' });
+    renderHistory(payload.attempts);
+  } catch (error) {
+    renderHistory([]);
+  }
+}
+
+async function refreshAuth() {
+  try {
+    const payload = await apiJson('/api/me', { method: 'GET' });
+    state.user = payload.authenticated ? payload.user : null;
+    setAuthUi();
+
+    if (state.user) {
+      statusLine.textContent = `Status: Welcome, ${state.user.username}.`;
+      await Promise.all([refreshFastest(), refreshHistory()]);
+    } else {
+      updateScoreboard({});
+      statusLine.textContent = 'Status: Please login.';
+    }
+  } catch (error) {
+    state.user = null;
+    setAuthUi();
+    statusLine.textContent = `Status: ${error.message}`;
+  }
+}
+
+async function onRegister() {
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+
+  try {
+    const payload = await apiJson('/api/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, password })
+    });
+    statusLine.textContent = `Status: ${payload.message} Now login.`;
+  } catch (error) {
+    statusLine.textContent = `Status: ${error.message}`;
+  }
+}
+
+async function onLogin() {
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+
+  try {
+    const payload = await apiJson('/api/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password })
+    });
+    state.user = payload.user;
+    usernameInput.value = '';
+    passwordInput.value = '';
+    setAuthUi();
+    statusLine.textContent = `Status: Logged in as ${state.user.username}.`;
+    await Promise.all([refreshFastest(), refreshHistory()]);
+  } catch (error) {
+    statusLine.textContent = `Status: ${error.message}`;
+  }
+}
+
+async function onLogout() {
+  try {
+    await apiJson('/api/logout', { method: 'POST' });
+    state.user = null;
+    resetRound();
+    setAuthUi();
+    updateScoreboard({});
+    statusLine.textContent = 'Status: Logged out.';
+  } catch (error) {
+    statusLine.textContent = `Status: ${error.message}`;
   }
 }
 
 async function startTest() {
-  if (state.isTesting) return;
+  if (!state.user || state.isTesting) return;
+
   startBtn.disabled = true;
   currentLine.textContent = 'Current: -';
   statusLine.textContent = 'Status: Requesting session...';
 
   try {
-    const response = await fetch('/api/start', { method: 'POST' });
-    const payload = await response.json();
-    if (!response.ok || !payload.session_id) {
-      throw new Error(payload.message || 'Failed to start test.');
-    }
+    const payload = await apiJson('/api/start', { method: 'POST' });
 
     state.currentTest = payload.session_id;
     state.isTesting = true;
@@ -67,7 +227,7 @@ async function startTest() {
     setArenaState('waiting', 'Wait for green...');
     statusLine.textContent = 'Status: Wait for the trigger.';
 
-    const delayMs = 1200 + Math.floor(Math.random() * 2000);
+    const delayMs = Number.isFinite(payload.wait_ms) ? payload.wait_ms : 1200;
     state.triggerTimerId = setTimeout(() => {
       state.hasTriggered = true;
       state.triggerTime = performance.now();
@@ -81,36 +241,35 @@ async function startTest() {
   }
 }
 
-async function submitScore(reactionMs) {
+async function submitScore(clientReactionMs) {
   if (!state.currentTest) return;
+
   statusLine.textContent = 'Status: Submitting score...';
   try {
-    const response = await fetch('/api/submit', {
+    const payload = await apiJson('/api/submit', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         session_id: state.currentTest,
-        reaction_time: reactionMs
+        reaction_time: clientReactionMs
       })
     });
-    const payload = await response.json();
-    if (!response.ok || !payload.valid) {
-      throw new Error(payload.message || 'Submission failed.');
-    }
 
+    currentLine.textContent = `Current: ${payload.reaction_time} ms (server)`;
     statusLine.textContent = 'Status: Round recorded.';
-    updateFastest(payload.fastest);
+    updateScoreboard(payload);
+    await refreshHistory();
   } catch (error) {
     statusLine.textContent = `Status: ${error.message}`;
   }
 }
 
-startBtn.addEventListener('click', () => {
-  startTest();
-});
+registerBtn.addEventListener('click', onRegister);
+loginBtn.addEventListener('click', onLogin);
+logoutBtn.addEventListener('click', onLogout);
+startBtn.addEventListener('click', startTest);
 
 arena.addEventListener('click', async () => {
-  if (!state.isTesting) return;
+  if (!state.user || !state.isTesting) return;
 
   if (!state.hasTriggered) {
     setArenaState('penalty', 'Too soon! Round failed.');
@@ -121,11 +280,10 @@ arena.addEventListener('click', async () => {
   }
 
   const reactionMs = Math.round(performance.now() - state.triggerTime);
-  currentLine.textContent = `Current: ${reactionMs} ms`;
   setArenaState('ready', `${reactionMs} ms`);
   await submitScore(reactionMs);
   resetRound();
 });
 
-setArenaState('ready', 'Press Start');
-loadFastest();
+setArenaState(null, 'Login to play');
+refreshAuth();

@@ -1,13 +1,9 @@
 :root {
   --bg: #0f1418;
-  --panel: #1a242c;
   --panel-border: #3e5665;
   --text: #f2f7fa;
   --muted: #bfd0db;
   --accent: #f3b33d;
-  --danger: #d95a50;
-  --ready: #327e7b;
-  --go: #50a95d;
 }
 
 * {
@@ -31,7 +27,7 @@ body {
 }
 
 .card {
-  width: min(640px, 100%);
+  width: min(740px, 100%);
   background: linear-gradient(155deg, #1a242c, #111920);
   border: 1px solid var(--panel-border);
   border-radius: 18px;
@@ -59,6 +55,53 @@ h1 {
   line-height: 1.45;
 }
 
+.auth-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.auth-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.auth-row input {
+  border: 1px solid #5a7180;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.auth-actions,
+.user-panel {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.auth-btn {
+  border: 1px solid #5a7180;
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.auth-btn.primary {
+  background: linear-gradient(120deg, #f3b33d, #e98f32);
+  color: #1a1a1a;
+  border: none;
+  font-weight: 700;
+}
+
 .start-btn {
   border: none;
   border-radius: 10px;
@@ -67,17 +110,12 @@ h1 {
   color: #1a1a1a;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 130ms ease, filter 130ms ease;
 }
 
-.start-btn:disabled {
-  opacity: 0.6;
+.start-btn:disabled,
+.arena:disabled {
+  opacity: 0.55;
   cursor: not-allowed;
-}
-
-.start-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  filter: brightness(1.03);
 }
 
 .arena {
@@ -114,33 +152,45 @@ h1 {
   border-color: #ffaea8;
 }
 
-.arena:active {
-  transform: scale(0.996);
-}
-
-.stats {
+.stats,
+.history {
   margin-top: 16px;
   background: rgba(255, 255, 255, 0.03);
   border-radius: 10px;
   padding: 12px;
 }
 
-.stats p {
+.stats p,
+.history li {
   margin: 6px 0;
   color: var(--muted);
 }
 
-#statusLine {
-  color: var(--text);
+.history h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
 }
 
-@media (max-width: 560px) {
+.history ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.hidden {
+  display: none;
+}
+
+@media (max-width: 640px) {
   .card {
     padding: 18px;
   }
 
+  .auth-row {
+    grid-template-columns: 1fr;
+  }
+
   .arena {
-    min-height: 200px;
+    min-height: 190px;
     font-size: 1.05rem;
   }
 }

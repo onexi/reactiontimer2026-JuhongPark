@@ -9,6 +9,9 @@ This document serves as an audit trail for the iterative development process. Af
 ### Loop [N]: [Description of Phase/Feature]
 **Date:** [YYYY-MM-DD]
 
+**Project Statement Integrity Check:**
+* Confirm the canonical `Project Statement` text remains unchanged in project docs.
+
 | Persona | Score (1-10) | Feedback / Key Observations |
 | :--- | :---: | :--- |
 | **The Architect** | - | [Notes on stability, code structure, errors] |
@@ -37,3 +40,24 @@ This document serves as an audit trail for the iterative development process. Af
 * Harden request identity/session handling and proxy/IP trust assumptions.
 * Add automated API checks and Lighthouse measurement for objective quality gates.
 * Improve engagement with streaks, richer feedback, and per-session history.
+
+---
+
+## Loop 2: Auth + SQLite Persistence Upgrade
+**Date:** 2026-02-09
+**Project Statement Integrity Check:**
+* Passed. Canonical `Project Statement` text is preserved.
+
+| Persona | Score (1-10) | Feedback / Key Observations |
+| :--- | :---: | :--- |
+| **The Architect** | 8 | SQLite schema initialization and endpoint structure are solid, and auth/session flow is integrated coherently. Startup/runtime still not executed in this environment due missing Node runtime, so live stability and migration behavior remain unverified. |
+| **The Referee** | 9 | Major improvement: server owns trigger timing and computes accepted reaction values, test sessions are single-use with ownership checks, and audit logs are persisted. Remaining risk: anti-automation controls are basic (no advanced bot fingerprinting/challenge). |
+| **The Performance Lead** | 7 | App remains lightweight with no framework overhead; query patterns are simple and indexed. Formal Lighthouse and runtime perf profiling were not executed, and auth/history requests add some request overhead. |
+| **The Gamer** | 8 | Login flow, personal/global fastest, and recent history improve replay motivation. Interaction remains responsive and clear; entertainment depth is still moderate without audio/streak mechanics. |
+
+**Summary of Action Items for Next Loop:**
+* Add automated API tests that cover auth, anti-cheat, and score integrity edge cases.
+* Run Lighthouse and capture measurable performance baselines.
+* Improve engagement features (streaks, richer feedback, personal progression).
+* Implement ranking UX requirement: always show global ranking; when logged in, additionally show personal ranking.
+* Add a dog-themed visual/game design direction to increase fun and thematic identity.

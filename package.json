@@ -1,7 +1,7 @@
 {
   "name": "reactiontimer2026-juhongpark",
-  "version": "1.0.0",
-  "description": "Reaction timer SPA with Express backend and anti-cheat validation.",
+  "version": "2.0.0",
+  "description": "Reaction timer SPA with Express backend, SQLite persistence, and auth.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -9,10 +9,14 @@
   "keywords": [
     "reaction-timer",
     "express",
-    "spa"
+    "spa",
+    "sqlite",
+    "authentication"
   ],
   "license": "MIT",
   "dependencies": {
-    "express": "^4.19.2"
+    "cookie-parser": "^1.4.7",
+    "express": "^4.19.2",
+    "sqlite3": "^5.1.7"
   }
 }
