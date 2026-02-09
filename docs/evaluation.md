@@ -66,7 +66,20 @@ This document serves as an audit trail for the iterative development process. Af
 
 ## Loop 3: Leaderboard + UX Update
 **Date:** 2026-02-09
-**Status:** Implementation complete, evaluator scoring pending
+**Project Statement Integrity Check:**
+* Passed. Canonical `Project Statement` text is preserved.
+
+| Persona | Score (1-10) | Feedback / Key Observations |
+| :--- | :---: | :--- |
+| **The Architect** | 8 | Global leaderboard and personal ranking APIs are integrated cleanly, and UI wiring remains readable. Limiting and filtering behavior are coherent with auth state. Runtime start and end-to-end execution still could not be verified in this environment because Node.js is unavailable. |
+| **The Referee** | 9 | Fairness model remains strong: server-authoritative submit validation, ownership checks, and single-use sessions are intact after leaderboard additions. Ranking queries are mode-scoped and do not expose unauthorized private data. |
+| **The Performance Lead** | 7 | Ranking and history retrieval stay lightweight with small payloads and limited result windows. Additional API reads for simultaneous game + leaderboard display add some request pressure; no measured Lighthouse baseline was captured yet. |
+| **The Gamer** | 8 | Always-visible global ranking and conditional personal ranking improved competitive motivation and replay loop. Core interaction is clear, but layout density on narrower viewports still needed refinement for auth/game/ranking coexistence. |
+
+**Summary of Action Items for Next Loop:**
+* Improve responsive layout to avoid auth control clipping while keeping game and rankings visible.
+* Keep leaderboard/history payloads capped and readable for quick scanning.
+* Add objective performance measurements (LCP/INP) in a runnable environment.
 
 ### Implemented Changes
 * Added `GET /api/leaderboard` with global top rankings and auth-aware personal ranking.
@@ -78,7 +91,20 @@ This document serves as an audit trail for the iterative development process. Af
 
 ## Loop 4: Gameplay Fun Layer (Modes + Progression)
 **Date:** 2026-02-09
-**Status:** Implementation complete, evaluator scoring pending
+**Project Statement Integrity Check:**
+* Passed. Canonical `Project Statement` text is preserved.
+
+| Persona | Score (1-10) | Feedback / Key Observations |
+| :--- | :---: | :--- |
+| **The Architect** | 8 | Mode-based flow (`Single`, `Multiple`) and mode-separated score/ranking persistence are implemented consistently across API and UI. Recent refactors removed some HUD elements and simplified pacing; behavior appears coherent from code review. Full runtime validation remains pending due missing Node runtime in this environment. |
+| **The Referee** | 9 | Multi-attempt submissions still rely on server-held trigger timing and session ownership, preserving anti-cheat posture while expanding mode complexity. Mode-specific ranking logic (sum for `Multiple`) is enforced server-side, reducing client tampering surface. |
+| **The Performance Lead** | 7 | App remains lightweight, with no heavy assets or framework cost. Added mode logic increases client state handling and request cadence but should remain responsive; formal perf instrumentation was not executed. |
+| **The Gamer** | 7 | Multiple mode and mode-separated rankings increase depth and replay value, but engagement is mixed after removing decorative/fun layers; pacing and feedback clarity improved but can still feel utilitarian. Latest adjustments to durations and state messaging helped readability, yet delight factor is still moderate. |
+
+**Summary of Action Items for Next Loop:**
+* Add one lightweight but meaningful fun mechanic (for example: streak milestones with celebratory feedback) without cluttering layout.
+* Continue tuning pacing so “wait/ready/nice/run complete” states are readable at first glance.
+* Keep leaderboard/history/personal lists at top-5 and validate alignment on small-to-medium widths.
 
 ### Implemented Changes
 * Added mode selection (`Single`, `Multiple`) with distinct pacing and run structure.
