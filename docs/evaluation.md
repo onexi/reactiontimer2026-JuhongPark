@@ -60,4 +60,30 @@ This document serves as an audit trail for the iterative development process. Af
 * Run Lighthouse and capture measurable performance baselines.
 * Improve engagement features (streaks, richer feedback, personal progression).
 * Implement ranking UX requirement: always show global ranking; when logged in, additionally show personal ranking.
-* Add a dog-themed visual/game design direction to increase fun and thematic identity.
+* Keep theme choices lightweight and prioritize gameplay clarity.
+
+---
+
+## Loop 3: Leaderboard + UX Update
+**Date:** 2026-02-09
+**Status:** Implementation complete, evaluator scoring pending
+
+### Implemented Changes
+* Added `GET /api/leaderboard` with global top rankings and auth-aware personal ranking.
+* Updated SPA to always render global ranking and conditionally render personal ranking when logged in.
+* Updated interaction design while preserving core gameplay flow.
+* Updated `docs/plan.md` and `README.md` to reflect the iteration scope and APIs.
+
+---
+
+## Loop 4: Gameplay Fun Layer (Modes + Progression)
+**Date:** 2026-02-09
+**Status:** Implementation complete, evaluator scoring pending
+
+### Implemented Changes
+* Added mode selection (`Single`, `Multiple`) with distinct pacing and run structure.
+* Added multi-attempt run flow for `Multiple` mode with combined round feedback.
+* Updated mode-specific scoring/ranking so `Multiple` uses run sum for leaderboard and fastest metrics.
+* Added combo, points, and level progression in the gameplay HUD.
+* Added live challenge tracking to support replay motivation.
+* Kept leaderboard/auth/fairness APIs unchanged and preserved server-authoritative scoring.

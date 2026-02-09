@@ -13,6 +13,7 @@ const MIN_REACTION_MS = 90;
 const MAX_REACTION_MS = 5000;
 const TEST_SESSION_TTL_MS = 15000;
 const AUTH_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
+const SCORE_MODES = new Set(['class', 'multiple']);
 
 const DB_PATH = path.join(__dirname, 'data', 'reaction_timer.db');
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
@@ -94,11 +95,26 @@ async function initializeDb() {
       user_id INTEGER NOT NULL,
       test_session_id TEXT NOT NULL UNIQUE,
       reaction_time INTEGER NOT NULL,
+      mode TEXT NOT NULL DEFAULT 'class',
+      run_id TEXT,
+      run_total INTEGER NOT NULL DEFAULT 1,
       created_at INTEGER NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (test_session_id) REFERENCES test_sessions(id) ON DELETE CASCADE
     )
   `);
+
+  const scoreColumns = await all('PRAGMA table_info(scores)');
+  const columnNames = new Set(scoreColumns.map((col) => col.name));
+  if (!columnNames.has('mode')) {
+    await run("ALTER TABLE scores ADD COLUMN mode TEXT NOT NULL DEFAULT 'class'");
+  }
+  if (!columnNames.has('run_id')) {
+    await run('ALTER TABLE scores ADD COLUMN run_id TEXT');
+  }
+  if (!columnNames.has('run_total')) {
+    await run('ALTER TABLE scores ADD COLUMN run_total INTEGER NOT NULL DEFAULT 1');
+  }
 
   await run(`
     CREATE TABLE IF NOT EXISTS audit_logs (
@@ -113,6 +129,8 @@ async function initializeDb() {
   `);
 
   await run('CREATE INDEX IF NOT EXISTS idx_scores_user_created ON scores(user_id, created_at DESC)');
+  await run('CREATE INDEX IF NOT EXISTS idx_scores_mode_user ON scores(mode, user_id, created_at DESC)');
+  await run('CREATE INDEX IF NOT EXISTS idx_scores_mode_run ON scores(mode, run_id, user_id)');
   await run('CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON test_sessions(user_id, status)');
   await run('CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id, expires_at)');
 }
@@ -153,6 +171,11 @@ function checkRateLimit(bucket, key, now, windowMs) {
   }
   bucket.set(key, now);
   return 0;
+}
+
+function normalizeMode(inputMode) {
+  const mode = typeof inputMode === 'string' ? inputMode.toLowerCase().trim() : 'class';
+  return SCORE_MODES.has(mode) ? mode : 'class';
 }
 
 async function writeAudit({ eventType, userId = null, testSessionId = null, clientKey = null, details = null }) {
@@ -197,6 +220,108 @@ async function getAuthContext(req) {
 function asyncHandler(handler) {
   return (req, res, next) => {
     Promise.resolve(handler(req, res, next)).catch(next);
+  };
+}
+
+async function getLeaderboardPayload(mode, userId = null) {
+  const normalizedMode = normalizeMode(mode);
+  let leaderboardQuery = '';
+  let personalQuery = '';
+
+  if (normalizedMode === 'multiple') {
+    leaderboardQuery = `
+      WITH completed_runs AS (
+        SELECT user_id, run_id, SUM(reaction_time) AS run_score, COUNT(*) AS run_count, MAX(run_total) AS run_total
+        FROM scores
+        WHERE mode = 'multiple' AND run_id IS NOT NULL
+        GROUP BY user_id, run_id
+        HAVING run_count = run_total
+      ),
+      user_best AS (
+        SELECT u.id AS user_id, u.username, MIN(cr.run_score) AS best_time, COUNT(*) AS attempts
+        FROM users u
+        JOIN completed_runs cr ON cr.user_id = u.id
+        GROUP BY u.id, u.username
+      ),
+      ranked AS (
+        SELECT user_id, username, best_time, attempts, DENSE_RANK() OVER (ORDER BY best_time ASC) AS rank
+        FROM user_best
+      )
+      SELECT rank, username, best_time, attempts
+      FROM ranked
+      ORDER BY rank ASC, username ASC
+      LIMIT 5
+    `;
+
+    personalQuery = `
+      WITH completed_runs AS (
+        SELECT user_id, run_id, SUM(reaction_time) AS run_score, COUNT(*) AS run_count, MAX(run_total) AS run_total
+        FROM scores
+        WHERE mode = 'multiple' AND run_id IS NOT NULL
+        GROUP BY user_id, run_id
+        HAVING run_count = run_total
+      ),
+      user_best AS (
+        SELECT u.id AS user_id, u.username, MIN(cr.run_score) AS best_time, COUNT(*) AS attempts
+        FROM users u
+        JOIN completed_runs cr ON cr.user_id = u.id
+        GROUP BY u.id, u.username
+      ),
+      ranked AS (
+        SELECT user_id, username, best_time, attempts, DENSE_RANK() OVER (ORDER BY best_time ASC) AS rank
+        FROM user_best
+      )
+      SELECT rank, username, best_time, attempts
+      FROM ranked
+      WHERE user_id = ?
+    `;
+  } else {
+    leaderboardQuery = `
+      WITH user_best AS (
+        SELECT u.id AS user_id, u.username, MIN(s.reaction_time) AS best_time, COUNT(*) AS attempts
+        FROM users u
+        JOIN scores s ON s.user_id = u.id
+        WHERE s.mode = 'class'
+        GROUP BY u.id, u.username
+      ),
+      ranked AS (
+        SELECT user_id, username, best_time, attempts, DENSE_RANK() OVER (ORDER BY best_time ASC) AS rank
+        FROM user_best
+      )
+      SELECT rank, username, best_time, attempts
+      FROM ranked
+      ORDER BY rank ASC, username ASC
+      LIMIT 5
+    `;
+
+    personalQuery = `
+      WITH user_best AS (
+        SELECT u.id AS user_id, u.username, MIN(s.reaction_time) AS best_time, COUNT(*) AS attempts
+        FROM users u
+        JOIN scores s ON s.user_id = u.id
+        WHERE s.mode = 'class'
+        GROUP BY u.id, u.username
+      ),
+      ranked AS (
+        SELECT user_id, username, best_time, attempts, DENSE_RANK() OVER (ORDER BY best_time ASC) AS rank
+        FROM user_best
+      )
+      SELECT rank, username, best_time, attempts
+      FROM ranked
+      WHERE user_id = ?
+    `;
+  }
+
+  const leaderboard = await all(leaderboardQuery);
+  let personalRanking = null;
+  if (userId) {
+    personalRanking = await get(personalQuery, [userId]);
+  }
+
+  return {
+    mode: normalizedMode,
+    leaderboard,
+    personal_ranking: personalRanking || null
   };
 }
 
@@ -308,18 +433,49 @@ app.post('/api/logout', asyncHandler(async (req, res) => {
 
 app.get('/api/fastest', asyncHandler(async (req, res) => {
   const auth = await getAuthContext(req);
-
-  const global = await get('SELECT MIN(reaction_time) AS fastest, COUNT(*) AS attempts FROM scores');
+  const mode = normalizeMode(req.query.mode);
+  let global = null;
   let personal = { fastest: null, attempts: 0 };
 
-  if (auth) {
-    personal = await get(
-      'SELECT MIN(reaction_time) AS fastest, COUNT(*) AS attempts FROM scores WHERE user_id = ?',
-      [auth.user.id]
-    ) || personal;
+  if (mode === 'multiple') {
+    global = await get(
+      `WITH completed_runs AS (
+         SELECT run_id, SUM(reaction_time) AS run_score, COUNT(*) AS run_count, MAX(run_total) AS run_total
+         FROM scores
+         WHERE mode = 'multiple' AND run_id IS NOT NULL
+         GROUP BY run_id
+         HAVING run_count = run_total
+       )
+       SELECT MIN(run_score) AS fastest, COUNT(*) AS attempts
+       FROM completed_runs`
+    );
+
+    if (auth) {
+      personal = await get(
+        `WITH completed_runs AS (
+           SELECT run_id, SUM(reaction_time) AS run_score, COUNT(*) AS run_count, MAX(run_total) AS run_total
+           FROM scores
+           WHERE mode = 'multiple' AND user_id = ? AND run_id IS NOT NULL
+           GROUP BY run_id
+           HAVING run_count = run_total
+         )
+         SELECT MIN(run_score) AS fastest, COUNT(*) AS attempts
+         FROM completed_runs`,
+        [auth.user.id]
+      ) || personal;
+    }
+  } else {
+    global = await get("SELECT MIN(reaction_time) AS fastest, COUNT(*) AS attempts FROM scores WHERE mode = 'class'");
+    if (auth) {
+      personal = await get(
+        "SELECT MIN(reaction_time) AS fastest, COUNT(*) AS attempts FROM scores WHERE user_id = ? AND mode = 'class'",
+        [auth.user.id]
+      ) || personal;
+    }
   }
 
   return res.json({
+    mode,
     global_fastest: global?.fastest ?? null,
     global_attempts: global?.attempts ?? 0,
     personal_fastest: personal?.fastest ?? null,
@@ -327,17 +483,44 @@ app.get('/api/fastest', asyncHandler(async (req, res) => {
   });
 }));
 
+app.get('/api/leaderboard', asyncHandler(async (req, res) => {
+  const auth = await getAuthContext(req);
+  const mode = normalizeMode(req.query.mode);
+  const payload = await getLeaderboardPayload(mode, auth?.user?.id ?? null);
+  return res.json(payload);
+}));
+
 app.get('/api/history', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
-  const rows = await all(
-    `SELECT reaction_time, created_at
-     FROM scores
-     WHERE user_id = ?
-     ORDER BY created_at DESC
-     LIMIT 10`,
-    [req.auth.user.id]
-  );
+  const mode = normalizeMode(req.query.mode);
+  let rows = [];
+  if (mode === 'multiple') {
+    rows = await all(
+      `WITH completed_runs AS (
+         SELECT run_id, SUM(reaction_time) AS reaction_time, MAX(created_at) AS created_at, COUNT(*) AS run_count, MAX(run_total) AS run_total
+         FROM scores
+         WHERE user_id = ? AND mode = 'multiple' AND run_id IS NOT NULL
+         GROUP BY run_id
+         HAVING run_count = run_total
+       )
+       SELECT reaction_time, created_at
+       FROM completed_runs
+       ORDER BY created_at DESC
+       LIMIT 5`,
+      [req.auth.user.id]
+    );
+  } else {
+    rows = await all(
+      `SELECT reaction_time, created_at
+       FROM scores
+       WHERE user_id = ? AND mode = 'class'
+       ORDER BY created_at DESC
+       LIMIT 5`,
+      [req.auth.user.id]
+    );
+  }
 
   return res.json({
+    mode,
     attempts: rows
   });
 }));
@@ -393,9 +576,21 @@ app.post('/api/submit', asyncHandler(requireAuth), asyncHandler(async (req, res)
     });
   }
 
-  const { session_id: sessionId, reaction_time: clientReactionTime } = req.body || {};
+  const {
+    session_id: sessionId,
+    reaction_time: clientReactionTime,
+    mode: inputMode,
+    run_id: runIdInput,
+    run_total: runTotalInput
+  } = req.body || {};
   if (typeof sessionId !== 'string') {
     return res.status(400).json({ valid: false, message: 'Invalid payload. session_id is required.' });
+  }
+  const mode = normalizeMode(inputMode);
+  const runId = typeof runIdInput === 'string' && runIdInput.trim() ? runIdInput.trim() : null;
+  const runTotal = Number.isInteger(runTotalInput) && runTotalInput > 0 ? runTotalInput : 1;
+  if (mode === 'multiple' && (!runId || runTotal < 2)) {
+    return res.status(400).json({ valid: false, message: 'Multiple mode requires run_id and run_total >= 2.' });
   }
 
   const testSession = await get(
@@ -471,32 +666,68 @@ app.post('/api/submit', asyncHandler(requireAuth), asyncHandler(async (req, res)
   );
 
   await run(
-    'INSERT INTO scores (user_id, test_session_id, reaction_time, created_at) VALUES (?, ?, ?, ?)',
-    [req.auth.user.id, sessionId, serverReaction, now]
+    `INSERT INTO scores (user_id, test_session_id, reaction_time, mode, run_id, run_total, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [req.auth.user.id, sessionId, serverReaction, mode, runId, runTotal, now]
   );
 
-  const personal = await get(
-    'SELECT MIN(reaction_time) AS fastest, COUNT(*) AS attempts FROM scores WHERE user_id = ?',
-    [req.auth.user.id]
-  );
-  const global = await get('SELECT MIN(reaction_time) AS fastest, COUNT(*) AS attempts FROM scores');
+  let personal = { fastest: null, attempts: 0 };
+  let global = { fastest: null, attempts: 0 };
+  if (mode === 'multiple') {
+    personal = await get(
+      `WITH completed_runs AS (
+         SELECT run_id, SUM(reaction_time) AS run_score, COUNT(*) AS run_count, MAX(run_total) AS run_total
+         FROM scores
+         WHERE mode = 'multiple' AND user_id = ? AND run_id IS NOT NULL
+         GROUP BY run_id
+         HAVING run_count = run_total
+       )
+       SELECT MIN(run_score) AS fastest, COUNT(*) AS attempts
+       FROM completed_runs`,
+      [req.auth.user.id]
+    ) || personal;
+
+    global = await get(
+      `WITH completed_runs AS (
+         SELECT run_id, SUM(reaction_time) AS run_score, COUNT(*) AS run_count, MAX(run_total) AS run_total
+         FROM scores
+         WHERE mode = 'multiple' AND run_id IS NOT NULL
+         GROUP BY run_id
+         HAVING run_count = run_total
+       )
+       SELECT MIN(run_score) AS fastest, COUNT(*) AS attempts
+       FROM completed_runs`
+    ) || global;
+  } else {
+    personal = await get(
+      "SELECT MIN(reaction_time) AS fastest, COUNT(*) AS attempts FROM scores WHERE user_id = ? AND mode = 'class'",
+      [req.auth.user.id]
+    ) || personal;
+    global = await get(
+      "SELECT MIN(reaction_time) AS fastest, COUNT(*) AS attempts FROM scores WHERE mode = 'class'"
+    ) || global;
+  }
+  const rankings = await getLeaderboardPayload(mode, req.auth.user.id);
 
   await writeAudit({
     eventType: 'submit',
     userId: req.auth.user.id,
     testSessionId: sessionId,
     clientKey,
-    details: `server_reaction=${serverReaction};client_reaction=${roundedClient}`
+    details: `mode=${mode};run_id=${runId};run_total=${runTotal};server_reaction=${serverReaction};client_reaction=${roundedClient}`
   });
 
   return res.json({
     valid: true,
     message: 'Reaction time recorded.',
+    mode,
     reaction_time: serverReaction,
     personal_fastest: personal?.fastest ?? null,
     personal_attempts: personal?.attempts ?? 0,
     global_fastest: global?.fastest ?? null,
-    global_attempts: global?.attempts ?? 0
+    global_attempts: global?.attempts ?? 0,
+    leaderboard: rankings.leaderboard,
+    personal_ranking: rankings.personal_ranking
   });
 }));
 

@@ -9,48 +9,75 @@
   <body>
     <main class="layout">
       <section class="card">
-        <p class="eyebrow">Reaction Timer</p>
+        <p class="eyebrow">Reaction Arena</p>
         <h1>Tap when the arena turns green.</h1>
         <p class="subtext">
-          Login required. Scores are persisted in SQLite and validated server-side.
+          Fastest valid reactions are ranked globally. Login to track your personal ranking.
         </p>
 
-        <section id="authBox" class="auth-box">
-          <div id="authForms" class="auth-forms">
-            <div class="auth-row">
-              <input id="usernameInput" type="text" placeholder="Username" maxlength="24" />
-              <input id="passwordInput" type="password" placeholder="Password" maxlength="128" />
-            </div>
-            <div class="auth-actions">
-              <button id="registerBtn" class="auth-btn" type="button">Register</button>
-              <button id="loginBtn" class="auth-btn primary" type="button">Login</button>
-            </div>
-          </div>
+        <section class="dashboard">
+          <section class="game-pane">
+            <section class="mode-panel">
+              <label for="modeSelect">Game Mode</label>
+          <select id="modeSelect">
+            <option value="class">Single</option>
+            <option value="multiple">Multiple</option>
+          </select>
+          <p id="modeHint">One reaction in one run (single score shown).</p>
+            </section>
 
-          <div id="userPanel" class="user-panel hidden">
-            <p id="userLine">Logged in as -</p>
-            <button id="logoutBtn" class="auth-btn" type="button">Logout</button>
-          </div>
-        </section>
+            <section id="authBox" class="auth-box">
+              <div id="authForms" class="auth-forms">
+                <div class="auth-row">
+                  <input id="usernameInput" type="text" placeholder="Username" maxlength="24" />
+                  <input id="passwordInput" type="password" placeholder="Password" maxlength="128" />
+                </div>
+                <div class="auth-actions">
+                  <button id="registerBtn" class="auth-btn" type="button">Register</button>
+                  <button id="loginBtn" class="auth-btn primary" type="button">Login</button>
+                </div>
+              </div>
 
-        <button id="startBtn" class="start-btn" type="button" disabled>Start Test</button>
+              <div id="userPanel" class="user-panel hidden">
+                <p id="userLine">Logged in as -</p>
+                <button id="logoutBtn" class="auth-btn" type="button">Logout</button>
+              </div>
+            </section>
 
-        <button id="arena" class="arena" type="button" aria-label="Reaction arena" disabled>
-          <span id="arenaLabel">Login to play</span>
-        </button>
+            <button id="startBtn" class="start-btn" type="button" disabled>Start Round</button>
 
-        <section class="stats">
-          <p id="statusLine">Status: Please login.</p>
-          <p id="currentLine">Current: -</p>
-          <p id="personalFastestLine">Personal Fastest: -</p>
-          <p id="globalFastestLine">Global Fastest: -</p>
-        </section>
+            <button id="arena" class="arena" type="button" aria-label="Reaction arena" disabled>
+              <span id="arenaLabel">Login to play</span>
+            </button>
+          </section>
 
-        <section class="history">
-          <h2>Recent Attempts</h2>
-          <ul id="historyList">
-            <li>No attempts yet.</li>
-          </ul>
+          <section class="side-pane">
+            <section class="stats">
+              <p id="statusLine">Status: Please login.</p>
+              <p id="currentLine">Current: -</p>
+              <p id="personalFastestLine">Personal Fastest: -</p>
+              <p id="globalFastestLine">Global Fastest: -</p>
+            </section>
+
+            <section class="history">
+              <h2>Global Ranking</h2>
+              <ul id="leaderboardList">
+                <li>No rankings yet.</li>
+              </ul>
+            </section>
+
+            <section id="personalRankSection" class="history hidden">
+              <h2>Personal Ranking</h2>
+              <p id="personalRankLine">Login to view your ranking.</p>
+            </section>
+
+            <section class="history">
+              <h2>Recent Attempts</h2>
+              <ul id="historyList">
+                <li>No attempts yet.</li>
+              </ul>
+            </section>
+          </section>
         </section>
       </section>
     </main>

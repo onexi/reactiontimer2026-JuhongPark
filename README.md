@@ -25,10 +25,17 @@
   - single-use test sessions
   - session ownership checks
   - expiry and validation bounds
-- Score views:
-  - personal fastest
-  - global fastest
-  - recent attempt history
+- Ranking and score views:
+  - mode-separated personal/global fastest
+  - global leaderboard (always visible)
+  - personal ranking (shown when logged in)
+  - mode-separated recent history
+  - `Multiple` mode ranking/score is based on sum of attempts in a run
+- Fun layer:
+  - mode selection (`Single`, `Multiple`)
+  - multiple mode runs several reaction attempts in one run
+  - combo, points, and level progression
+  - live challenge tracker for session goals
 
 ## Project Structure
 - `server.js`: Express API + SQLite initialization + auth/game logic
@@ -47,8 +54,9 @@
 - Gameplay
   - `POST /api/start` (auth required)
   - `POST /api/submit` (auth required)
-  - `GET /api/fastest`
-  - `GET /api/history` (auth required)
+  - `GET /api/fastest?mode=class|multiple`
+  - `GET /api/leaderboard?mode=class|multiple`
+  - `GET /api/history?mode=class|multiple` (auth required)
 
 ## Run Locally
 1. Install dependencies:
