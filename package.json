@@ -1,0 +1,18 @@
+{
+  "name": "reactiontimer2026-juhongpark",
+  "version": "1.0.0",
+  "description": "Reaction timer SPA with Express backend and anti-cheat validation.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "reaction-timer",
+    "express",
+    "spa"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

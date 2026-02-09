@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reaction Timer</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <section class="card">
+        <p class="eyebrow">Reaction Timer</p>
+        <h1>Tap when the arena turns green.</h1>
+        <p class="subtext">
+          Test your reflexes. Premature clicks fail the round. Server-side checks
+          enforce fairness.
+        </p>
+
+        <button id="startBtn" class="start-btn" type="button">Start Test</button>
+
+        <button id="arena" class="arena" type="button" aria-label="Reaction arena">
+          <span id="arenaLabel">Press Start</span>
+        </button>
+
+        <section class="stats">
+          <p id="statusLine">Status: Idle</p>
+          <p id="currentLine">Current: -</p>
+          <p id="fastestLine">Fastest: -</p>
+        </section>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
