@@ -8,6 +8,16 @@
 - Do not edit, paraphrase, shorten, or expand the statement text in any project file.
 - If copied to another file, it must remain verbatim.
 
+## Project Statement Alignment
+- "develop a reaction timer app to test reaction times and record the fastest":
+  - The app measures reaction rounds and stores fastest records in SQLite.
+- "You will need a server that serves up a web page":
+  - Node.js + Express serves the SPA from `public/` and provides gameplay/auth APIs.
+- "Think through how the timer is fair":
+  - Timing validation is server-authoritative: trigger window is set on `/api/start`, accepted reaction time is computed on `/api/submit`.
+- "deal with someone who rapidly keeps clicking ... or uses some other mechanism to cheat":
+  - Anti-cheat controls include rate limiting, single-use test sessions, session ownership checks, and validation/expiry bounds.
+
 ## Technical Framework
 - Runtime & Server: Node.js + Express
 - Architecture: Single Page Application (SPA) with vanilla HTML/CSS/JS
