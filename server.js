@@ -14,6 +14,10 @@ const MAX_REACTION_MS = 5000;
 const TEST_SESSION_TTL_MS = 15000;
 const AUTH_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const SCORE_MODES = new Set(['class', 'multiple']);
+const START_WAIT_BY_MODE = {
+  class: { min: 1200, span: 2000 },
+  multiple: { min: 2100, span: 1400 }
+};
 
 const DB_PATH = path.join(__dirname, 'data', 'reaction_timer.db');
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
@@ -59,6 +63,7 @@ async function initializeDb() {
       username TEXT NOT NULL UNIQUE,
       password_salt TEXT NOT NULL,
       password_hash TEXT NOT NULL,
+      is_guest INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL
     )
   `);
@@ -133,6 +138,12 @@ async function initializeDb() {
   await run('CREATE INDEX IF NOT EXISTS idx_scores_mode_run ON scores(mode, run_id, user_id)');
   await run('CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON test_sessions(user_id, status)');
   await run('CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id, expires_at)');
+
+  const userColumns = await all('PRAGMA table_info(users)');
+  const userColumnNames = new Set(userColumns.map((col) => col.name));
+  if (!userColumnNames.has('is_guest')) {
+    await run('ALTER TABLE users ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0');
+  }
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
@@ -158,6 +169,28 @@ function isValidUsername(username) {
 
 function isValidPassword(password) {
   return typeof password === 'string' && password.length >= 6 && password.length <= 128;
+}
+
+function generateGuestUsername() {
+  return `Guest_${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+}
+
+function createSessionToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+async function createAuthSessionForUser(userId) {
+  const token = createSessionToken();
+  const tokenHash = hashToken(token);
+  const sessionId = crypto.randomUUID();
+  const now = Date.now();
+
+  await run(
+    'INSERT INTO auth_sessions (id, user_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)',
+    [sessionId, userId, tokenHash, now, now + AUTH_SESSION_TTL_MS]
+  );
+
+  return { token };
 }
 
 function getClientKey(req) {
@@ -192,7 +225,7 @@ async function getAuthContext(req) {
 
   const tokenHash = hashToken(token);
   const row = await get(
-    `SELECT s.id AS session_id, s.user_id, s.expires_at, u.username
+    `SELECT s.id AS session_id, s.user_id, s.expires_at, u.username, u.is_guest
      FROM auth_sessions s
      JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = ?`,
@@ -212,7 +245,8 @@ async function getAuthContext(req) {
     sessionId: row.session_id,
     user: {
       id: row.user_id,
-      username: row.username
+      username: row.username,
+      is_guest: Boolean(row.is_guest)
     }
   };
 }
@@ -384,7 +418,7 @@ app.post('/api/login', asyncHandler(async (req, res) => {
   }
 
   const user = await get(
-    'SELECT id, username, password_salt, password_hash FROM users WHERE username = ?',
+    'SELECT id, username, password_salt, password_hash, is_guest FROM users WHERE username = ?',
     [username]
   );
 
@@ -392,15 +426,7 @@ app.post('/api/login', asyncHandler(async (req, res) => {
     return res.status(401).json({ valid: false, message: 'Invalid credentials.' });
   }
 
-  const token = crypto.randomBytes(32).toString('hex');
-  const tokenHash = hashToken(token);
-  const sessionId = crypto.randomUUID();
-  const now = Date.now();
-
-  await run(
-    'INSERT INTO auth_sessions (id, user_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)',
-    [sessionId, user.id, tokenHash, now, now + AUTH_SESSION_TTL_MS]
-  );
+  const { token } = await createAuthSessionForUser(user.id);
 
   res.cookie('sid', token, {
     httpOnly: true,
@@ -416,8 +442,53 @@ app.post('/api/login', asyncHandler(async (req, res) => {
     message: 'Login successful.',
     user: {
       id: user.id,
-      username: user.username
+      username: user.username,
+      is_guest: Boolean(user.is_guest)
     }
+  });
+}));
+
+app.post('/api/guest', asyncHandler(async (req, res) => {
+  let guestUser = null;
+  let attempts = 0;
+
+  while (!guestUser && attempts < 5) {
+    attempts += 1;
+    const username = generateGuestUsername();
+    const { salt, hash } = hashPassword(createSessionToken());
+    const createdAt = Date.now();
+    try {
+      const result = await run(
+        `INSERT INTO users (username, password_salt, password_hash, created_at, is_guest)
+         VALUES (?, ?, ?, ?, 1)`,
+        [username, salt, hash, createdAt]
+      );
+      guestUser = { id: result.lastID, username, is_guest: true };
+    } catch (error) {
+      if (!String(error.message).includes('UNIQUE')) {
+        throw error;
+      }
+    }
+  }
+
+  if (!guestUser) {
+    return res.status(500).json({ valid: false, message: 'Failed to create a guest session.' });
+  }
+
+  const { token } = await createAuthSessionForUser(guestUser.id);
+  res.cookie('sid', token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: false,
+    maxAge: AUTH_SESSION_TTL_MS
+  });
+
+  await writeAudit({ eventType: 'guest_login', userId: guestUser.id, details: 'Guest session created' });
+
+  return res.json({
+    valid: true,
+    message: 'Guest session started.',
+    user: guestUser
   });
 }));
 
@@ -529,6 +600,7 @@ app.post('/api/start', asyncHandler(requireAuth), asyncHandler(async (req, res) 
   const now = Date.now();
   const clientKey = getClientKey(req);
   const limiterKey = `${req.auth.user.id}:${clientKey}`;
+  const mode = normalizeMode(req.body?.mode);
 
   const retryAfterMs = checkRateLimit(rateLimit.start, limiterKey, now, RATE_LIMIT_MS);
   if (retryAfterMs > 0) {
@@ -539,7 +611,8 @@ app.post('/api/start', asyncHandler(requireAuth), asyncHandler(async (req, res) 
     });
   }
 
-  const waitMs = 1200 + Math.floor(Math.random() * 2000);
+  const waitConfig = START_WAIT_BY_MODE[mode] || START_WAIT_BY_MODE.class;
+  const waitMs = waitConfig.min + Math.floor(Math.random() * waitConfig.span);
   const sessionId = crypto.randomUUID();
 
   await run(
@@ -553,12 +626,13 @@ app.post('/api/start', asyncHandler(requireAuth), asyncHandler(async (req, res) 
     userId: req.auth.user.id,
     testSessionId: sessionId,
     clientKey,
-    details: `wait_ms=${waitMs}`
+    details: `mode=${mode};wait_ms=${waitMs}`
   });
 
   return res.json({
     session_id: sessionId,
-    wait_ms: waitMs
+    wait_ms: waitMs,
+    mode
   });
 }));
 

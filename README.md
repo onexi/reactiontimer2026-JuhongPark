@@ -25,7 +25,7 @@
 - Authentication: Register/Login/Logout with HTTP-only cookie sessions
 
 ## Features
-- Account-based gameplay (login required to start tests).
+- Account or guest gameplay (players can login or start a guest session).
 - SQLite persistence for users, auth sessions, test sessions, scores, and audit logs.
 - Server-authoritative reaction validation:
   - server sets trigger window on `/api/start`
@@ -59,6 +59,7 @@
 - Auth
   - `POST /api/register`
   - `POST /api/login`
+  - `POST /api/guest`
   - `POST /api/logout`
   - `GET /api/me`
 - Gameplay

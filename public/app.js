@@ -46,6 +46,7 @@ const usernameInput = document.getElementById('usernameInput');
 const passwordInput = document.getElementById('passwordInput');
 const registerBtn = document.getElementById('registerBtn');
 const loginBtn = document.getElementById('loginBtn');
+const guestBtn = document.getElementById('guestBtn');
 const logoutBtn = document.getElementById('logoutBtn');
 const authForms = document.getElementById('authForms');
 const userPanel = document.getElementById('userPanel');
@@ -108,13 +109,13 @@ function resetRound() {
   startBtn.disabled = !loggedIn;
   arena.disabled = !loggedIn;
   modeSelect.disabled = false;
-  setArenaState(loggedIn ? 'ready' : null, loggedIn ? 'Press Start' : 'Login to play');
+  setArenaState(loggedIn ? 'ready' : null, loggedIn ? 'Press Start' : 'Login or play as guest');
 }
 
 function updateScoreboard(payload) {
   state.fastestGlobal = Number.isFinite(payload?.global_fastest) ? payload.global_fastest : null;
   state.fastestPersonal = Number.isFinite(payload?.personal_fastest) ? payload.personal_fastest : null;
-  const unit = state.mode === 'multiple' ? 'sum ms' : 'ms';
+  const unit = 'ms';
 
   personalFastestLine.textContent =
     state.fastestPersonal === null
@@ -163,7 +164,7 @@ function renderLeaderboard(entries) {
 function renderPersonalRanking(ranking) {
   if (!state.user) {
     personalRankSection.classList.add('hidden');
-    personalRankLine.textContent = 'Login to view your ranking.';
+    personalRankLine.textContent = 'Login or play as guest to view your ranking.';
     return;
   }
 
@@ -182,7 +183,9 @@ function setAuthUi() {
   userPanel.classList.toggle('hidden', !loggedIn);
 
   if (loggedIn) {
-    userLine.textContent = `Logged in as ${state.user.username}`;
+    userLine.textContent = state.user.is_guest
+      ? `Playing as guest ${state.user.username}`
+      : `Logged in as ${state.user.username}`;
   } else {
     currentLine.textContent = 'Current: -';
     renderHistory([]);
@@ -255,11 +258,13 @@ async function refreshAuth() {
     setAuthUi();
 
     if (state.user) {
-      statusLine.textContent = `Status: Welcome, ${state.user.username}.`;
+      statusLine.textContent = state.user.is_guest
+        ? `Status: Guest mode active as ${state.user.username}.`
+        : `Status: Welcome, ${state.user.username}.`;
       await Promise.all([refreshFastest(), refreshHistory(), refreshLeaderboard()]);
     } else {
       updateScoreboard({});
-      statusLine.textContent = 'Status: Please login.';
+      statusLine.textContent = 'Status: Please login or play as guest.';
       await refreshLeaderboard();
     }
   } catch (error) {
@@ -318,6 +323,20 @@ async function onLogin() {
   }
 }
 
+async function onGuestPlay() {
+  try {
+    const payload = await apiJson('/api/guest', { method: 'POST' });
+    state.user = payload.user;
+    usernameInput.value = '';
+    passwordInput.value = '';
+    setAuthUi();
+    statusLine.textContent = `Status: Playing as guest ${state.user.username}.`;
+    await Promise.all([refreshFastest(), refreshHistory(), refreshLeaderboard()]);
+  } catch (error) {
+    statusLine.textContent = `Status: ${error.message}`;
+  }
+}
+
 async function onLogout() {
   try {
     await apiJson('/api/logout', { method: 'POST' });
@@ -341,14 +360,17 @@ async function beginAttempt() {
     ? `Status: Preparing attempt ${attemptText}...`
     : 'Status: Preparing round...';
 
-  const payload = await apiJson('/api/start', { method: 'POST' });
+  const payload = await apiJson('/api/start', {
+    method: 'POST',
+    body: JSON.stringify({ mode: state.mode })
+  });
   state.currentTest = payload.session_id;
   state.hasTriggered = false;
   state.triggerTime = null;
 
   setArenaState('waiting', showAttemptFraction ? `${modeConfig.label} ${attemptText}: wait...` : `${modeConfig.label}: wait...`);
 
-  const delayMs = getRoundDelayMs();
+  const delayMs = Number.isFinite(payload.wait_ms) ? payload.wait_ms : getRoundDelayMs();
   state.triggerTimerId = setTimeout(() => {
     state.hasTriggered = true;
     state.triggerTime = performance.now();
@@ -408,6 +430,7 @@ async function submitScore(clientReactionMs) {
 
 registerBtn.addEventListener('click', onRegister);
 loginBtn.addEventListener('click', onLogin);
+guestBtn.addEventListener('click', onGuestPlay);
 logoutBtn.addEventListener('click', onLogout);
 startBtn.addEventListener('click', startTest);
 
@@ -456,7 +479,7 @@ arena.addEventListener('click', async () => {
       currentLine.textContent =
         state.sequence.total === 1
           ? `Current: ${serverReaction} ms (server)`
-          : `Current Set: sum ${total} ms, best ${best} ms`;
+          : `Current: ${total} ms (best ${best} ms)`;
       statusLine.textContent = `Status: ${MODES[state.mode].label} run complete.`;
       setArenaState('ready', 'Run complete. Press Start for next run');
       setTimeout(() => {
@@ -481,5 +504,5 @@ arena.addEventListener('click', async () => {
 });
 
 updateModeUi();
-setArenaState(null, 'Login to play');
+setArenaState(null, 'Login or play as guest');
 refreshAuth();

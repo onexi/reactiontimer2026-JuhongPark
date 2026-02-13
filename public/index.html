@@ -10,9 +10,11 @@
     <main class="layout">
       <section class="card">
         <p class="eyebrow">Reaction Arena</p>
+        <p class="course-line">1.001: Engineering Computation and Data Science</p>
+        <p class="professor-line">Instructors: Abel Sanchez and John R. Williams</p>
         <h1>Tap when the arena turns green.</h1>
         <p class="subtext">
-          Fastest valid reactions are ranked globally. Login to track your personal ranking.
+          Fastest valid reactions are ranked globally. Login or play as guest to track your personal ranking.
         </p>
 
         <section class="dashboard">
@@ -35,6 +37,7 @@
                 <div class="auth-actions">
                   <button id="registerBtn" class="auth-btn" type="button">Register</button>
                   <button id="loginBtn" class="auth-btn primary" type="button">Login</button>
+                  <button id="guestBtn" class="auth-btn" type="button">Play as Guest</button>
                 </div>
               </div>
 
@@ -47,7 +50,7 @@
             <button id="startBtn" class="start-btn" type="button" disabled>Start Round</button>
 
             <button id="arena" class="arena" type="button" aria-label="Reaction arena" disabled>
-              <span id="arenaLabel">Login to play</span>
+              <span id="arenaLabel">Login or play as guest</span>
             </button>
           </section>
 
@@ -68,7 +71,7 @@
 
             <section id="personalRankSection" class="history hidden">
               <h2>Personal Ranking</h2>
-              <p id="personalRankLine">Login to view your ranking.</p>
+              <p id="personalRankLine">Login or play as guest to view your ranking.</p>
             </section>
 
             <section class="history">
