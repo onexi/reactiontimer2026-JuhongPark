@@ -3,6 +3,9 @@
 ## Project Statement
 > "You need to develop a reaction timer app to test reaction times and record the fastest. You will need a server that serves up a web page. Think through how the timer is “fair”. Consider how to deal with someone who rapidly keeps clicking, or uses some other mechanism to “cheat” your system."
 
+## App Screenshot
+<img src="docs/assets/reaction-arena-screenshot.png" alt="Reaction Arena Screenshot" width="560" />
+
 ## Project Statement Policy
 - The `Project Statement` section is immutable.
 - Do not edit, paraphrase, shorten, or expand the statement text in any project file.
