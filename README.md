@@ -84,6 +84,22 @@
    http://localhost:3000
    ```
 
+## Lighthouse Test Summary
+- Test context:
+  - `Navigation` mode is not suitable for this workflow because this project is a SPA and interactive checks were run after in-app state changes.
+  - Results below are from `Timespan` and `Snapshot` runs.
+- Timespan result:
+  - Performance: `6/6` audits passed
+  - Best Practices: `8/8` audits passed
+- Snapshot result:
+  - Performance: `1/1` audits passed
+  - Accessibility: `19/19` audits passed
+  - Best Practices: `4/4` audits passed
+  - SEO: `3/5` audits passed
+- Interpretation:
+  - Core runtime quality is strong for Performance, Accessibility, and Best Practices in the tested SPA flow.
+  - Remaining improvement area is SEO in Snapshot checks.
+
 ## Notes
 - SQLite DB files are runtime artifacts and are git-ignored.
 - Current session cookie is configured for local development (`secure: false`); set secure cookies for HTTPS production.
