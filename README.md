@@ -32,6 +32,7 @@
   - server computes accepted reaction time on `/api/submit`
 - Anti-cheat controls:
   - rate limiting for starts/submissions
+  - guest session creation cooldown + daily per-client cap
   - single-use test sessions
   - session ownership checks
   - expiry and validation bounds

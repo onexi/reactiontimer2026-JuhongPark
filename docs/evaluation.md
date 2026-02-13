@@ -142,3 +142,28 @@ This document serves as an audit trail for the iterative development process. Af
 * Fixed early-click false negatives by synchronizing client trigger display to server `wait_ms`.
 * Updated UI copy and presentation for guest mode and course identity (`1.001` + instructor line).
 * Refreshed visual theme with a data/engineering-oriented style while keeping mobile responsiveness.
+
+---
+
+## Loop 6: Guest Abuse Controls + Plan Refresh
+**Date:** 2026-02-13
+**Project Statement Integrity Check:**
+* Passed. Canonical `Project Statement` text is preserved.
+
+| Persona | Score (1-10) | Feedback / Key Observations |
+| :--- | :---: | :--- |
+| **The Architect** | 9 | Iteration 5 planning and implementation are aligned: guest anti-abuse requirements in `docs/plan.md` are reflected in `server.js` with explicit constants, audit-backed counting, and endpoint checks. Flow handling for already-authenticated users is clearer and reduces inconsistent state transitions. |
+| **The Referee** | 9 | Fairness posture improved: guest creation now has cooldown and daily caps per client key, with audit events for blocked attempts. Server-side timing authority and premature-click rejection remain intact. Residual risk remains around client-key/IP granularity under NAT/shared networks and distributed abuse across many addresses. |
+| **The Performance Lead** | 8 | Added guest checks are lightweight (single count query and in-memory limiter) and should have low overhead at this scale. No heavy frontend assets were introduced. Formal Lighthouse and interaction metrics are still missing in this environment. |
+| **The Gamer** | 8 | Guest play remains low-friction and accessible while abuse controls are mostly invisible to normal users. Edge users who rapidly retry guest creation may encounter rate-limit friction; message clarity is acceptable but could be more user-guiding. |
+
+**Summary of Action Items for Next Loop:**
+* Add automated API regression tests for guest limits (`cooldown`, `daily cap`) and timing integrity paths.
+* Refine client-facing rate-limit guidance (for example: clearer retry timing in UI for guest creation throttling).
+* Capture objective performance baselines (Lighthouse, INP/LCP) in a runnable browser-enabled environment.
+
+### Implemented Changes
+* Updated `docs/plan.md` to Iteration 5 with direct traceability to Loop 5 feedback.
+* Added guest creation cooldown and daily cap controls in `/api/guest`.
+* Added audit-log events for blocked guest creation attempts (`guest_login_rate_limited`, `guest_login_daily_limit_blocked`).
+* Updated README anti-cheat section to document guest creation limits.

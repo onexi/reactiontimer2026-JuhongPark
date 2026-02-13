@@ -1,10 +1,10 @@
-# Technical Plan: Reaction Timer Application (Iteration 4)
+# Technical Plan: Reaction Timer Application (Iteration 5)
 
 ## Overview
-This iteration improves entertainment without sacrificing fairness:
-- Add `Single` mode and `Multiple` mode with distinct pacing.
-- Add progression systems (combo, points, level).
-- Add session challenges to motivate repeated play.
+This iteration follows Loop 5 evaluation by hardening guest-mode fairness and improving verification quality:
+- Add anti-abuse controls for guest session creation.
+- Preserve server-authoritative timing and validate trigger-sync behavior.
+- Prepare measurable quality gates for API integrity and performance.
 
 ### Project Statement Lock
 - The `Project Statement` is immutable across project documentation.
@@ -15,22 +15,21 @@ This iteration improves entertainment without sacrificing fairness:
 ## 1. Goals for This Iteration
 
 ### Functional Goals
-- Keep authenticated gameplay and SQLite-backed score integrity.
+- Keep account and guest gameplay flows available.
 - Keep global leaderboard always visible.
-- Keep personal ranking visible when authenticated.
-- Split score and ranking views by mode (`Single`, `Multiple`).
-- Add selectable modes:
-  - `Single`: one reaction per run
-  - `Multiple`: several reactions per run and sum-based scoring/ranking
-
-### Engagement Goals
-- Add progression metrics: combo, points, and level.
-- Add live challenge objectives shown in UI.
-- Provide immediate reward feedback after each valid round.
+- Keep personal ranking visible for authenticated users (including guests).
+- Preserve mode support (`Single`, `Multiple`) without layout shift.
 
 ### Security & Fairness Goals
-- Preserve server-authoritative reaction validation via `/api/submit`.
-- Preserve anti-cheat controls: session ownership, single-use sessions, rate limiting.
+- Keep server-authoritative reaction validation on `/api/submit`.
+- Keep premature-click rejection and session ownership checks.
+- Add guest abuse controls to reduce disposable account spam:
+  - short-window guest creation rate limit per client key
+  - daily guest creation cap per client key based on audit trail
+
+### Quality Goals
+- Define API checks for guest lifecycle and trigger-sync invariants.
+- Keep UI theme/course identity updates without regressing responsiveness.
 
 ---
 
@@ -40,9 +39,10 @@ This iteration improves entertainment without sacrificing fairness:
 - Backend: Node.js + Express + SQLite
 - Frontend: Vanilla HTML/CSS/JS SPA
 
-### API Surface (unchanged in Iteration 4)
+### API Surface (Iteration 5)
 - `POST /api/register`
 - `POST /api/login`
+- `POST /api/guest`
 - `POST /api/logout`
 - `GET /api/me`
 - `POST /api/start` (auth required)
@@ -53,51 +53,39 @@ This iteration improves entertainment without sacrificing fairness:
 
 ---
 
-## 3. Gameplay Layer Design
+## 3. Implementation Plan
 
-### Modes
-- `Single`: single reaction run with balanced pacing.
-- `Multiple`: 3 sequential reactions in one run; run score is sum of attempts.
+### 3.1 Guest Abuse Mitigation (Primary)
+- Add guest-creation cooldown using in-memory limiter keyed by client key.
+- Enforce 24-hour guest creation cap using `audit_logs` (`guest_login` events).
+- Audit blocked guest creation attempts for reviewability.
 
-### Progression
-- Combo increments on valid round, resets on failed round.
-- Points are awarded from server-validated reaction time + mode multiplier + combo bonus.
-- Level is derived from total points and displayed continuously.
+### 3.2 Timing Integrity Safeguard
+- Preserve `/api/start` authoritative `wait_ms` response.
+- Ensure client trigger UI uses server-returned `wait_ms`.
 
-### Challenges (Session Scoped)
-- Land 3 rounds under 260 ms.
-- Reach combo 5.
-- Complete 10 valid rounds.
-
----
-
-## 4. Frontend Flow (Iteration 4)
-
-1. User logs in and chooses a mode.
-2. User starts a round; client requests `/api/start`.
-3. Trigger appears after mode-tuned delay.
-4. Click submits to `/api/submit`.
-5. On success:
-   - update fastest data and rankings
-   - update combo/points/level/challenges
-   - refresh recent attempts
-6. On failure:
-   - reset combo and show clear feedback
+### 3.3 Verification Hooks
+- Add/define test scenarios for:
+  - `/api/guest` success path and cookie session creation
+  - repeated `/api/guest` calls within cooldown window -> `429`
+  - over daily cap -> `429`
+  - `/api/start` `wait_ms` and `/api/submit` premature/valid boundaries
 
 ---
 
-## 5. Validation Targets
+## 4. Validation Targets
 
 ### Functional
-- Mode switching changes pacing and labels.
-- Progression metrics update after each successful round.
-- Challenge status updates correctly.
+- Guest mode starts gameplay without manual login.
+- Existing login/logout behavior remains stable.
+- Single/Multiple mode flows remain unchanged.
 
 ### Integrity
-- Leaderboard and personal rank still reflect server-validated scores only.
-- Multiple-mode ranking is computed from completed run sums (not per-attempt averages).
-- Client-only gamification does not alter persisted score fairness.
+- Premature submit is still rejected server-side.
+- Guest creation is constrained by cooldown and daily cap.
+- Score persistence and ranking remain server-authoritative.
 
-### UX
-- Game HUD remains readable on desktop/mobile.
-- Round feedback is immediate and understandable.
+### UX/Performance
+- Course-themed UI remains responsive on desktop/mobile.
+- No additional heavy frontend assets are introduced.
+- Lighthouse/INP/LCP capture is queued for runnable measurement environment.

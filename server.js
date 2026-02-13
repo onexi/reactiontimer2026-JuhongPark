@@ -9,6 +9,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const RATE_LIMIT_MS = 2000;
+const GUEST_CREATE_RATE_LIMIT_MS = 30000;
+const GUEST_CREATE_DAILY_WINDOW_MS = 1000 * 60 * 60 * 24;
+const GUEST_CREATE_DAILY_LIMIT = 20;
 const MIN_REACTION_MS = 90;
 const MAX_REACTION_MS = 5000;
 const TEST_SESSION_TTL_MS = 15000;
@@ -26,7 +29,8 @@ const db = new sqlite3.Database(DB_PATH);
 
 const rateLimit = {
   start: new Map(),
-  submit: new Map()
+  submit: new Map(),
+  guest: new Map()
 };
 
 function run(sql, params = []) {
@@ -449,6 +453,54 @@ app.post('/api/login', asyncHandler(async (req, res) => {
 }));
 
 app.post('/api/guest', asyncHandler(async (req, res) => {
+  const existingAuth = await getAuthContext(req);
+  if (existingAuth?.user?.is_guest) {
+    return res.json({
+      valid: true,
+      message: 'Guest session already active.',
+      user: existingAuth.user
+    });
+  }
+  if (existingAuth?.user) {
+    return res.status(400).json({ valid: false, message: 'Already logged in. Logout to start a guest session.' });
+  }
+
+  const now = Date.now();
+  const clientKey = getClientKey(req);
+  const retryAfterMs = checkRateLimit(rateLimit.guest, clientKey, now, GUEST_CREATE_RATE_LIMIT_MS);
+  if (retryAfterMs > 0) {
+    await writeAudit({
+      eventType: 'guest_login_rate_limited',
+      clientKey,
+      details: `retry_after_ms=${retryAfterMs}`
+    });
+    return res.status(429).json({
+      valid: false,
+      message: 'Guest session creation is rate-limited. Please wait and try again.',
+      retry_after_ms: retryAfterMs
+    });
+  }
+
+  const dailyWindowStart = now - GUEST_CREATE_DAILY_WINDOW_MS;
+  const recentGuestLogins = await get(
+    `SELECT COUNT(*) AS attempts
+     FROM audit_logs
+     WHERE event_type = 'guest_login' AND client_key = ? AND created_at >= ?`,
+    [clientKey, dailyWindowStart]
+  );
+  const dailyAttempts = recentGuestLogins?.attempts ?? 0;
+  if (dailyAttempts >= GUEST_CREATE_DAILY_LIMIT) {
+    await writeAudit({
+      eventType: 'guest_login_daily_limit_blocked',
+      clientKey,
+      details: `daily_attempts=${dailyAttempts};daily_limit=${GUEST_CREATE_DAILY_LIMIT}`
+    });
+    return res.status(429).json({
+      valid: false,
+      message: 'Daily guest session limit reached for this client. Please try again later.'
+    });
+  }
+
   let guestUser = null;
   let attempts = 0;
 
@@ -456,7 +508,7 @@ app.post('/api/guest', asyncHandler(async (req, res) => {
     attempts += 1;
     const username = generateGuestUsername();
     const { salt, hash } = hashPassword(createSessionToken());
-    const createdAt = Date.now();
+    const createdAt = now;
     try {
       const result = await run(
         `INSERT INTO users (username, password_salt, password_hash, created_at, is_guest)
@@ -483,7 +535,7 @@ app.post('/api/guest', asyncHandler(async (req, res) => {
     maxAge: AUTH_SESSION_TTL_MS
   });
 
-  await writeAudit({ eventType: 'guest_login', userId: guestUser.id, details: 'Guest session created' });
+  await writeAudit({ eventType: 'guest_login', userId: guestUser.id, clientKey, details: 'Guest session created' });
 
   return res.json({
     valid: true,
